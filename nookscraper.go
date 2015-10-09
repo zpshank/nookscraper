@@ -2,17 +2,25 @@ package main
 
 import (
 	"fmt"
-	"golang.org/x/net/html"
-	//"io/ioutil"
-	"net/http"
-	//"strings"
 	"github.com/zackshank/nookscraper/parser"
+	"golang.org/x/net/html"
+	"net/http"
+	"os"
 	"time"
 )
 
 const (
 	SiteRoot = "https://nookipedia.com"
+	ImgDir   = "images"
 )
+
+func MakeDir() {
+	// Make root images directory
+	os.Mkdir(ImgDir, 0777)
+
+	// Make images subdirectories
+	os.MkdirAll(fmt.Sprint(ImgDir, "/villagers"), 0777)
+}
 
 func FindVillagerListNode(r *http.Response) *html.Node {
 	np := parser.NodeParser{}
@@ -28,6 +36,11 @@ func FindVillagerListNode(r *http.Response) *html.Node {
 
 func main() {
 	np, vp := parser.NodeParser{}, VillagerParser{}
+
+	MakeDir()
+
+	var vl []*Villager
+
 	resp, err := http.Get(fmt.Sprintf("%s/wiki/List_of_villagers", SiteRoot))
 	if err != nil {
 		fmt.Println("There was an error with the request: ", err.Error())
@@ -42,13 +55,18 @@ func main() {
 		_, tr = np.FindSibling(tr, "tag", "tr")
 	}
 
+	var id int = 1
 	for _, v := vp.Parse(tr); v != nil; _, v = vp.Parse(tr) {
+		v.ID = id
 		fmt.Printf("Found Villager: %s\n", v)
+		append(vl, v)
 		var next bool
 		next, tr = np.FindSibling(tr, "tag", "tr")
 		if !next {
 			break
 		}
 		time.Sleep(time.Second)
+		id++
 	}
+
 }

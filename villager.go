@@ -4,24 +4,26 @@ import (
 	"fmt"
 	"github.com/zackshank/nookscraper/parser"
 	"golang.org/x/net/html"
-	//"io/ioutil"
+	"io/ioutil"
 	"net/http"
+	//"os"
 	"strings"
 	"time"
 )
 
 type Villager struct {
+	ID           int
 	Name         string
 	JapaneseName string
 	Gender       string
 	Species      string
 	Personality  string
 	Games        []int
-	Birthday     time.Time
+	Birthday     *time.Time
 }
 
 func (v *Villager) String() string {
-	return fmt.Sprintf("%s (%s), %s, %s, %s, %v", v.Name, v.JapaneseName, v.Species, v.Gender, v.Personality, v.Games)
+	return fmt.Sprintf("%s (%s), %s, %s, %s, %v, %v", v.Name, v.JapaneseName, v.Species, v.Gender, v.Personality, v.Games, v.Birthday)
 }
 
 type VillagerParser struct{}
@@ -127,9 +129,7 @@ func (vp *VillagerParser) Parse(tr *html.Node) (bool, *Villager) {
 		return false, nil
 	}
 
-	result := <-ch
-
-	fmt.Println(result)
+	<-ch
 
 	return true, &v
 }
@@ -253,23 +253,67 @@ func (vp *VillagerParser) parseAdditionalInformation(url string, v *Villager, c 
 	_, table = np.FindSibling(table, "tag", "table")
 
 	// Attempt to retrieve birthday
-	vp.parseBirthday(table)
+	found, birthday := vp.parseBirthday(table)
+	if found {
+		v.Birthday = birthday
+	}
 
-	c <- false
+	// Attemt to retrieve image
+	found = vp.parseImage(table, fmt.Sprint(v.Name, ".png"))
+	c <- true
 
 }
 
-func (vp *VillagerParser) parseBirthday(root *html.Node) (bool, string) {
+func (vp *VillagerParser) parseBirthday(root *html.Node) (bool, *time.Time) {
 	np := parser.NodeParser{}
 
 	found, th := np.Find(root, "html", "Birthday")
 	if !found {
-		return false, ""
+		return false, nil
 	}
 
 	_, td := np.FindSibling(th, "tag", "td")
 	_, anode := np.Find(td, "tag", "a")
 	textelement := anode.FirstChild
-	fmt.Println("Found Birthday: ", string(textelement.Data))
-	return true, ""
+	layout := "January 2"
+	t, err := time.Parse(layout, string(textelement.Data))
+	if err != nil {
+		return false, nil
+	}
+	fmt.Printf("Found Birthday: %v\n", t)
+	return true, &t
+}
+
+func (vp *VillagerParser) parseImage(root *html.Node, filename string) bool {
+	np := parser.NodeParser{}
+
+	found, img := np.Find(root, "tag", "img")
+	if !found {
+		return false
+	}
+
+	ok, attr := np.GetAttribute(img, "src")
+	if !ok {
+		return false
+	}
+	resp, err := http.Get(fmt.Sprint(SiteRoot, attr.Val))
+	if err != nil {
+		return false
+	}
+
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return false
+	}
+
+	err = ioutil.WriteFile(fmt.Sprint(ImgDir, "/villagers/", filename), body, 0644)
+
+	if err != nil {
+		return false
+	}
+
+	return true
+
 }
