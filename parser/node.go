@@ -25,7 +25,7 @@ func (np *NodeParser) match(node *html.Node, key string, value string) bool {
 	case "html":
 		if node.Type == html.ElementNode {
 			child := node.FirstChild
-			if child.Type == html.TextNode && strings.TrimSpace(child.Data) == value {
+			if child != nil && child.Type == html.TextNode && strings.TrimSpace(child.Data) == value {
 				return true
 			}
 		}

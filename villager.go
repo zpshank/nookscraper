@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/zackshank/nookscraper/parser"
 	"golang.org/x/net/html"
-	"io/ioutil"
+	//"io/ioutil"
 	"net/http"
 	"strings"
 	"time"
@@ -232,28 +232,44 @@ func (vp *VillagerParser) parseGames(td *html.Node) (bool, []int) {
 }
 
 func (vp *VillagerParser) parseAdditionalInformation(url string, v *Villager, c chan bool) {
-
+	np := parser.NodeParser{}
 	// Get page
-	fmt.Println("Getting url: ", url)
 	resp, err := http.Get(url)
 	if err != nil {
-		fmt.Println("There was an error getting ", url)
 		c <- false
 		return
 	}
 
 	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-
+	doc, err := html.Parse(resp.Body)
 	if err != nil {
-		fmt.Println("There was an error reading the body")
 		c <- false
 		return
 	}
 
-	fmt.Println("Villager Page: %s", string(body))
+	// Find Table with Addt. Info
+	_, mw := np.Find(doc, "id", "mw-content-text")
+	_, table := np.Find(mw, "tag", "table")
+	_, table = np.FindSibling(table, "tag", "table")
+
+	// Attempt to retrieve birthday
+	vp.parseBirthday(table)
 
 	c <- false
 
+}
+
+func (vp *VillagerParser) parseBirthday(root *html.Node) (bool, string) {
+	np := parser.NodeParser{}
+
+	found, th := np.Find(root, "html", "Birthday")
+	if !found {
+		return false, ""
+	}
+
+	_, td := np.FindSibling(th, "tag", "td")
+	_, anode := np.Find(td, "tag", "a")
+	textelement := anode.FirstChild
+	fmt.Println("Found Birthday: ", string(textelement.Data))
+	return true, ""
 }
